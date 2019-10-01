@@ -98,6 +98,7 @@ def echo_gen_direct(distances, azimuths, elevations, sample_frequency=250000):
     absorption_coefficient = 1.318  # http://www.sengpielaudio.com/calculator-air.htm
     reflection_strength = -20
     speed_of_sound = 340
+    noise_floor = 20
 
     emission_samples = int(sample_frequency * emission_duration)
     emission_time = numpy.linspace(0, emission_duration, emission_samples)
@@ -122,7 +123,7 @@ def echo_gen_direct(distances, azimuths, elevations, sample_frequency=250000):
 
     echoes = emission_level + reflection_strength + loss_directionality + loss_attenuation + loss_spreading
     echoes_pa = db2pa(echoes)
-    echoes_pa[echoes < 0] = 0
+    echoes_pa[echoes < noise_floor] = 0 #noise floor
 
     # %%
     # Make impulse response and echo sequence
@@ -134,12 +135,17 @@ def echo_gen_direct(distances, azimuths, elevations, sample_frequency=250000):
 
     # Get energy
     # Make impulse response and echo sequence
-    first_echo_index = numpy.min(impulse_indices[echoes > 20])
+    energy = 0
     echo_window = numpy.zeros(len(impulse_time))
-    echo_window[first_echo_index] = 1
-    echo_window = numpy.convolve(emission_window, echo_window, mode='same')
-    windowed_echo_sequence = echo_sequence * echo_window
-    energy = numpy.sum(windowed_echo_sequence ** 2)
+    windowed_echo_sequence = numpy.zeros(len(impulse_time))
+    # If we have echoes...
+    detectable = impulse_indices[echoes > noise_floor]
+    if len(detectable) > 0:
+        first_echo_index = numpy.min(detectable)
+        echo_window[first_echo_index] = 1
+        echo_window = numpy.convolve(emission_window, echo_window, mode='same')
+        windowed_echo_sequence = echo_sequence * echo_window
+        energy = numpy.sum(windowed_echo_sequence ** 2)
 
     # %% prepare return value
     return_value = {}
